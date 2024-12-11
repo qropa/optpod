@@ -1,4 +1,5 @@
-[DATA] apple0 = 2025
-[DATA] apple1 = 2026
-[DATA] apple0 = 2025
-[DATA] score = 2025
+[DATA] sigma = 2304.0
+[DATA] l = 38538
+[DATA] occ = 89
+[DATA] score = 0.979
+Time = 2.8114545345306396

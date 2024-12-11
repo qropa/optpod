@@ -9,5 +9,5 @@ fn main() {
         eprintln!("[DATA] {} = {}", name, n + i);
     }
     println!("n={}", n);
-    eprintln!("[DATA] score = {}", n);
+    eprintln!("[DATA] score = {}", n * 5);
 }

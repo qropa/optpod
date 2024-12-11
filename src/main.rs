@@ -1,4 +1,5 @@
 mod run;
+mod setbest;
 mod settings;
 
 use anyhow::Result;
@@ -21,6 +22,9 @@ fn exec_command(args: Cli) -> Result<()> {
         Command::Init => {
             settings::init()?;
         }
+        Command::Best => {
+            setbest::set_best()?;
+        }
     }
 
     Ok(())
@@ -38,4 +42,6 @@ enum Command {
     Run(run::RunArgs),
     #[clap(name = "init")]
     Init,
+    #[clap(name = "best")]
+    Best,
 }

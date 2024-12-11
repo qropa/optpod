@@ -1,3 +1,5 @@
+use core::f64;
+use std::collections::HashMap;
 use std::f64::NAN;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
@@ -11,6 +13,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::io::Write;
+use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
@@ -57,7 +60,17 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
     let res_file_path = format!("{}/result.jsonl", config.result_dir);
     let res_file = Arc::new(Mutex::new(std::fs::File::create(&res_file_path)?));
     let best_file_path = format!("{}/best.jsonl", config.result_dir);
-    let best_file = std::fs::File::create(&best_file_path);
+    if !std::path::Path::new(&best_file_path).exists() {
+        std::fs::File::create(&best_file_path)?;
+    }
+    let best_file = std::fs::File::open(&best_file_path)?;
+    let mut best_scores = HashMap::new();
+    let reader = BufReader::new(best_file);
+    for line in reader.lines() {
+        let line = line?;
+        let res: ExecResult = serde_json::from_str(&line)?;
+        best_scores.insert(res.seed, res.score);
+    }
 
     let next_seed = Arc::new(Mutex::new(start));
     let res_que = Arc::new(Mutex::new(BinaryHeap::new()));
@@ -66,6 +79,10 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build()?;
+
+    let sum_score = Arc::new(Mutex::new(0.0));
+    let sum_log_score = Arc::new(Mutex::new(0.0));
+    let sum_relative = Arc::new(Mutex::new(0.0));
     pool.install(|| {
         (start..=end).into_par_iter().for_each(|_| {
             let seed = {
@@ -74,7 +91,12 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
                 *next_seed += 1;
                 seed
             };
-            let res = single_exec(seed, &config).unwrap();
+            let res = single_exec(seed, &config, &best_scores).unwrap();
+
+            *sum_score.lock().unwrap() += res.score;
+            *sum_log_score.lock().unwrap() += res.score.ln();
+            *sum_relative.lock().unwrap() += res.relative;
+
             let mut res_que = res_que.lock().unwrap();
             let mut next_print_seed = next_print_seed.lock().unwrap();
             let mut res_file = res_file.lock().unwrap();
@@ -88,13 +110,20 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
         });
     });
 
+    let mean_score = *sum_score.lock().unwrap() / (end - start + 1) as f64;
+    let mean_log_score = *sum_log_score.lock().unwrap() / (end - start + 1) as f64;
+    let mean_relative = *sum_relative.lock().unwrap() / (end - start + 1) as f64;
+    println!("Avg Score: {}", mean_score);
+    println!("Avg Log Score: {}", mean_log_score);
+    println!("Avg relative: {}", mean_relative);
+
     Ok(())
 }
 
 #[derive(Debug, PartialOrd, PartialEq, Serialize, Deserialize)]
-struct ExecResult {
-    seed: usize,
-    score: f64,
+pub struct ExecResult {
+    pub seed: usize,
+    pub score: f64,
     relative: f64,
     data: Vec<(String, String)>,
 }
@@ -132,8 +161,12 @@ impl core::fmt::Display for ExecResult {
     }
 }
 
-fn single_exec(seed: usize, config: &Config) -> Result<ExecResult> {
-    let input_file_path = format!("tools/in/{:04}.txt", seed);
+fn single_exec(
+    seed: usize,
+    config: &Config,
+    best_scores: &HashMap<usize, f64>,
+) -> Result<ExecResult> {
+    let input_file_path = format!("{}/{:04}.txt", config.in_dir, seed);
     let input_file = std::fs::File::open(&input_file_path)?;
     let output = std::process::Command::new(&config.cmd_tester)
         .stdin(std::process::Stdio::from(input_file))
@@ -149,7 +182,7 @@ fn single_exec(seed: usize, config: &Config) -> Result<ExecResult> {
     let mut res = ExecResult {
         seed,
         score: NAN,
-        relative: rnd::nextf() * 100.,
+        relative: 0.0,
         data: vec![],
     };
     for line in String::from_utf8_lossy(&output.stderr).lines() {
@@ -166,6 +199,22 @@ fn single_exec(seed: usize, config: &Config) -> Result<ExecResult> {
             }
         }
     }
+    let best_score = best_scores.get(&seed).copied().unwrap_or(f64::NAN);
+    if best_score.is_nan() || res.score.is_nan() {
+        res.relative = 0.0;
+    } else {
+        match config.scoring.as_str() {
+            "min" => {
+                res.relative = best_score / res.score * 100.;
+            }
+            "max" => {
+                res.relative = res.score / best_score * 100.;
+            }
+            _ => {
+                anyhow::bail!("Invalid scoring method: {}", config.scoring);
+            }
+        }
+    }
     let output_file_path = format!(
         "{}/{:>04}.{}",
         config.tests_dir, seed, config.standard_output_extension
@@ -179,81 +228,4 @@ fn single_exec(seed: usize, config: &Config) -> Result<ExecResult> {
     let mut error_file = std::fs::File::create(&error_file_path)?;
     error_file.write_all(&output.stderr)?;
     Ok(res)
-}
-
-pub fn get_time() -> f64 {
-    static mut START: f64 = -1.0;
-    let end = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs_f64();
-    unsafe {
-        if START < 0.0 {
-            START = end;
-        }
-        end - START
-    }
-}
-
-pub mod rnd {
-    #![allow(dead_code)]
-    static mut A: u64 = 1;
-
-    pub fn next() -> u32 {
-        unsafe {
-            let mut x = A;
-            A *= 0xcafef00dd15ea5e5;
-            x ^= x >> 22;
-            (x >> 22 + (x >> 61)) as u32
-        }
-    }
-
-    pub fn next64() -> u64 {
-        (next() as u64) << 32 | next() as u64
-    }
-
-    pub fn nextf() -> f64 {
-        unsafe { std::mem::transmute::<u64, f64>(0x3ff0000000000000 | (next() as u64) << 20) - 1. }
-    }
-
-    pub fn get(n: usize) -> usize {
-        assert!(n <= u32::MAX as usize);
-        next() as usize * n >> 32
-    }
-
-    pub fn range(a: usize, b: usize) -> usize {
-        assert!(a < b);
-        get(b - a) + a
-    }
-
-    pub fn range_skip(a: usize, b: usize, skip: usize) -> usize {
-        assert!(a <= skip && skip < b);
-        let n = range(a, b - 1);
-        n + (skip <= n) as usize
-    }
-
-    pub fn rangei(a: i64, b: i64) -> i64 {
-        assert!(a < b);
-        get((b - a) as usize) as i64 + a
-    }
-
-    pub fn shuffle<T>(list: &mut [T]) {
-        for i in (0..list.len()).rev() {
-            list.swap(i, get(i + 1));
-        }
-    }
-
-    pub fn shuffle_iter<T: Copy>(list: &mut [T]) -> impl Iterator<Item = T> + '_ {
-        (0..list.len()).rev().map(|i| {
-            list.swap(i, get(i + 1));
-            list[i]
-        })
-    }
-
-    // 平均 mu, 標準偏差 sigma の正規分布に従う乱数を生成する
-    pub fn sample(mu: f64, sigma: f64) -> f64 {
-        let u1 = nextf();
-        let u2 = nextf();
-        mu + (-2.0 * u1.ln() * sigma * sigma).sqrt() * (2.0 * 3.14159265 * u2).cos()
-    }
 }

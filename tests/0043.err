@@ -1,4 +1,5 @@
-[DATA] apple0 = 1849
-[DATA] apple1 = 1850
-[DATA] apple0 = 1849
-[DATA] score = 1849
+[DATA] sigma = 1259.0
+[DATA] l = 10254
+[DATA] occ = 84
+[DATA] score = 0.949
+Time = 2.8065524101257324

@@ -24,10 +24,8 @@ pub fn init() -> Result<()> {
         cmd_tester: "./target/release/a".to_string(),
         extraction_regex: r"^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$"
             .to_string(),
-        scoring: "min".to_string(),
+        scoring: "max".to_string(),
         threads_no: 0,
-        relative_score: false,
-        auto_save_best: false,
     };
     let toml = toml::to_string_pretty(&config)?;
 
@@ -57,6 +55,4 @@ pub struct Config {
     pub extraction_regex: String,
     pub scoring: String,
     pub threads_no: u32,
-    pub relative_score: bool,
-    pub auto_save_best: bool,
 }
