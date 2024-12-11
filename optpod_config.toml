@@ -1,10 +1,11 @@
+in_dir = "tools/in"
 result_dir = "."
 tests_dir = "tests"
 standard_output_extension = "out"
 standard_error_extension = "err"
-cmd_tester = "./target/release/a"
+cmd_tester = "./tools/sample/target/release/sample"
 extraction_regex = '^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$'
 scoring = "min"
-threads_no = -1
+threads_no = 0
 relative_score = false
 auto_save_best = false

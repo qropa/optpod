@@ -16,6 +16,7 @@ pub fn init() -> Result<()> {
         }
     }
     let config = Config {
+        in_dir: "tools/in".to_string(),
         result_dir: ".".to_string(),
         tests_dir: "tests".to_string(),
         standard_output_extension: "out".to_string(),
@@ -24,7 +25,7 @@ pub fn init() -> Result<()> {
         extraction_regex: r"^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$"
             .to_string(),
         scoring: "min".to_string(),
-        threads_no: -1,
+        threads_no: 0,
         relative_score: false,
         auto_save_best: false,
     };
@@ -47,14 +48,15 @@ pub fn read_settings() -> Result<Config> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    result_dir: String,
-    tests_dir: String,
-    standard_output_extension: String,
-    standard_error_extension: String,
-    cmd_tester: String,
-    extraction_regex: String,
-    scoring: String,
-    threads_no: i32,
-    relative_score: bool,
-    auto_save_best: bool,
+    pub in_dir: String,
+    pub result_dir: String,
+    pub tests_dir: String,
+    pub standard_output_extension: String,
+    pub standard_error_extension: String,
+    pub cmd_tester: String,
+    pub extraction_regex: String,
+    pub scoring: String,
+    pub threads_no: u32,
+    pub relative_score: bool,
+    pub auto_save_best: bool,
 }

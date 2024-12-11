@@ -1,12 +1,16 @@
-use core::fmt;
+use std::f64::NAN;
 use std::{cmp::Reverse, collections::BinaryHeap};
 
-use crate::settings;
+use crate::settings::{self, Config};
 
 use anyhow::Result;
 use clap::Parser;
 use colored::Colorize;
+use num_cpus;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
@@ -33,20 +37,35 @@ fn parse_seed(s: &str) -> Result<(u32, u32)> {
     }
     Ok(seed)
 }
-
-pub fn run(args: RunArgs) -> Result<()> {
+pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
     let seed = args.seed;
     let start = seed.0;
     let end = seed.1;
 
-    let _config = settings::read_settings()?;
-
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(24).build()?;
+    let config = settings::read_settings()?;
+    let num_threads = if config.threads_no > 0 {
+        config.threads_no as usize
+    } else {
+        num_cpus::get()
+    };
+    if !std::path::Path::new(&config.tests_dir).exists() {
+        std::fs::create_dir(&config.tests_dir)?;
+    }
+    if !std::path::Path::new(&config.result_dir).exists() {
+        std::fs::create_dir(&config.result_dir)?;
+    }
+    let res_file_path = format!("{}/result.jsonl", config.result_dir);
+    let res_file = Arc::new(Mutex::new(std::fs::File::create(&res_file_path)?));
+    let best_file_path = format!("{}/best.jsonl", config.result_dir);
+    let best_file = std::fs::File::create(&best_file_path);
 
     let next_seed = Arc::new(Mutex::new(start));
     let res_que = Arc::new(Mutex::new(BinaryHeap::new()));
     let next_print_seed = Arc::new(Mutex::new(start));
 
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()?;
     pool.install(|| {
         (start..=end).into_par_iter().for_each(|_| {
             let seed = {
@@ -55,14 +74,16 @@ pub fn run(args: RunArgs) -> Result<()> {
                 *next_seed += 1;
                 seed
             };
-            let res = single_exec(seed, "command").unwrap();
+            let res = single_exec(seed, &config).unwrap();
             let mut res_que = res_que.lock().unwrap();
             let mut next_print_seed = next_print_seed.lock().unwrap();
+            let mut res_file = res_file.lock().unwrap();
             res_que.push(Reverse(res));
             while res_que.len() > 0 && res_que.peek().unwrap().0.seed == *next_print_seed as usize {
                 let res = res_que.pop().unwrap().0;
                 println!("{}", res);
                 *next_print_seed += 1;
+                writeln!(res_file, "{}", serde_json::to_string(&res).unwrap()).unwrap();
             }
         });
     });
@@ -70,33 +91,37 @@ pub fn run(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Eq, Ord)]
+#[derive(Debug, PartialOrd, PartialEq, Serialize, Deserialize)]
 struct ExecResult {
     seed: usize,
-    score: String,
-    relative: Option<String>,
+    score: f64,
+    relative: f64,
     data: Vec<(String, String)>,
 }
-impl fmt::Display for ExecResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Ord for ExecResult {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.score.partial_cmp(&other.score).unwrap()
+    }
+}
+impl Eq for ExecResult {
+    fn assert_receiver_is_total_eq(&self) {}
+}
+
+impl core::fmt::Display for ExecResult {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "{}: {:>09}{} {}",
+            "{}: {:>9}{} {}",
             format!("{:>04}", self.seed).green(),
             self.score,
-            if let Some(relative) = self.relative.as_ref() {
-                let relative = relative.parse::<f64>().unwrap();
-                if relative < 50. {
-                    format!(" {:>6.2}", relative).red()
-                } else if relative < 80. {
-                    format!(" {:>6.2}", relative).yellow()
-                } else if relative < 95. {
-                    format!(" {:>6.2}", relative).green()
-                } else {
-                    format!(" {:>6.2}", relative).blue()
-                }
+            if self.relative < 50. {
+                format!(" {:>6.2}", self.relative).red()
+            } else if self.relative < 80. {
+                format!(" {:>6.2}", self.relative).yellow()
+            } else if self.relative < 95. {
+                format!(" {:>6.2}", self.relative).green()
             } else {
-                "".to_string().white()
+                format!(" {:>6.2}", self.relative).blue()
             },
             self.data
                 .iter()
@@ -107,28 +132,53 @@ impl fmt::Display for ExecResult {
     }
 }
 
-fn single_exec(seed: usize, command: &str) -> Result<ExecResult> {
-    let start_time = get_time();
-    let end_time = start_time + rnd::nextf() * 2.0;
-    while get_time() < end_time {}
-    let res = ExecResult {
-        seed,
-        score: rnd::get(1000000).to_string(),
-        relative: Some((rnd::nextf() * 100.0).to_string()),
-        data: vec![
-            ("a".to_string(), rnd::next().to_string()),
-            ("b".to_string(), "200".to_string()),
-            ("sum".to_string(), "16.5".to_string()),
-        ],
-    };
-    Ok(res)
-}
+fn single_exec(seed: usize, config: &Config) -> Result<ExecResult> {
+    let input_file_path = format!("tools/in/{:04}.txt", seed);
+    let input_file = std::fs::File::open(&input_file_path)?;
+    let output = std::process::Command::new(&config.cmd_tester)
+        .stdin(std::process::Stdio::from(input_file))
+        .output()?;
 
-fn sum(a: usize, b: usize) -> usize {
-    let start_time = get_time();
-    let end_time = start_time + rnd::nextf() * 5.0;
-    while get_time() < end_time {}
-    a + b
+    if !output.status.success() {
+        anyhow::bail!(
+            "Failed to execute seed:{}, Error:{:?}",
+            seed,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let mut res = ExecResult {
+        seed,
+        score: NAN,
+        relative: rnd::nextf() * 100.,
+        data: vec![],
+    };
+    for line in String::from_utf8_lossy(&output.stderr).lines() {
+        if let Some(caps) = regex::Regex::new(&config.extraction_regex)?.captures(line) {
+            if &caps["VARIABLE"] == "score" {
+                res.score = caps["VALUE"].parse()?;
+            } else {
+                if let Some((_, v)) = res.data.iter_mut().find(|(k, _)| *k == caps["VARIABLE"]) {
+                    *v = caps["VALUE"].to_string();
+                } else {
+                    res.data
+                        .push((caps["VARIABLE"].to_string(), caps["VALUE"].to_string()));
+                }
+            }
+        }
+    }
+    let output_file_path = format!(
+        "{}/{:>04}.{}",
+        config.tests_dir, seed, config.standard_output_extension
+    );
+    let mut output_file = std::fs::File::create(&output_file_path)?;
+    output_file.write_all(&output.stdout)?;
+    let error_file_path = format!(
+        "{}/{:>04}.{}",
+        config.tests_dir, seed, config.standard_error_extension
+    );
+    let mut error_file = std::fs::File::create(&error_file_path)?;
+    error_file.write_all(&output.stderr)?;
+    Ok(res)
 }
 
 pub fn get_time() -> f64 {
