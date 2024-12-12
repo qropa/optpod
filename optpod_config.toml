@@ -1,6 +1,7 @@
 in_dir = "../../atcoder/ahc040/tools/in2"
 result_dir = "optpod"
 tests_dir = "tests"
+default_dir = "default"
 standard_output_extension = "out"
 standard_error_extension = "err"
 cmd_tester = "../../atcoder/ahc040/target/release/a"

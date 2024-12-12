@@ -18,8 +18,9 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
 pub struct RunArgs {
-    #[arg(short, long, value_parser = parse_seed)]
+    #[arg(value_parser = parse_seed)]
     seed: (u32, u32),
+    id: Option<String>,
 }
 
 fn parse_seed(s: &str) -> Result<(u32, u32)> {
@@ -57,7 +58,16 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
     if !std::path::Path::new(&config.result_dir).exists() {
         std::fs::create_dir(&config.result_dir)?;
     }
-    let res_file_path = format!("{}/result.jsonl", config.result_dir);
+    let id = args.id.unwrap_or(config.default_dir.clone());
+    if &id == "best" || &id == "prev_best" {
+        anyhow::bail!("Invalid id: {}. Must not be 'best' or 'prev_best'", id);
+    }
+    let output_dir = format!("{}/{}", config.tests_dir, id);
+    if !std::path::Path::new(&output_dir).exists() {
+        std::fs::create_dir(&output_dir)?;
+    }
+
+    let res_file_path = format!("{}/{}.jsonl", config.result_dir, id);
     let res_file = Arc::new(Mutex::new(std::fs::File::create(&res_file_path)?));
     let best_file_path = format!("{}/best.jsonl", config.result_dir);
     if !std::path::Path::new(&best_file_path).exists() {
@@ -91,7 +101,7 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
                 *next_seed += 1;
                 seed
             };
-            let res = single_exec(seed, &config, &best_scores).unwrap();
+            let res = single_exec(seed, &id, &config, &best_scores).unwrap();
 
             *sum_score.lock().unwrap() += res.score;
             *sum_log_score.lock().unwrap() += res.score.ln();
@@ -124,8 +134,8 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
 pub struct ExecResult {
     pub seed: usize,
     pub score: f64,
-    relative: f64,
-    data: Vec<(String, String)>,
+    pub relative: f64,
+    pub data: Vec<(String, String)>,
 }
 impl Ord for ExecResult {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -163,6 +173,7 @@ impl core::fmt::Display for ExecResult {
 
 fn single_exec(
     seed: usize,
+    id: &str,
     config: &Config,
     best_scores: &HashMap<usize, f64>,
 ) -> Result<ExecResult> {
@@ -216,14 +227,14 @@ fn single_exec(
         }
     }
     let output_file_path = format!(
-        "{}/{:>04}.{}",
-        config.tests_dir, seed, config.standard_output_extension
+        "{}/{}/{:>04}.{}",
+        config.tests_dir, id, seed, config.standard_output_extension
     );
     let mut output_file = std::fs::File::create(&output_file_path)?;
     output_file.write_all(&output.stdout)?;
     let error_file_path = format!(
-        "{}/{:>04}.{}",
-        config.tests_dir, seed, config.standard_error_extension
+        "{}/{}/{:>04}.{}",
+        config.tests_dir, id, seed, config.standard_error_extension
     );
     let mut error_file = std::fs::File::create(&error_file_path)?;
     error_file.write_all(&output.stderr)?;

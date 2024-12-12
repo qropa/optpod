@@ -1,12 +1,20 @@
 use crate::run;
 use crate::settings;
 use anyhow::Result;
+use clap::Parser;
 use std::io::{BufRead, Write};
 
-pub fn set_best() -> Result<()> {
+#[derive(Parser)]
+pub struct SetBestArgs {
+    id: Option<String>,
+}
+
+pub fn set_best(args: SetBestArgs) -> Result<()> {
     let config = settings::read_settings()?;
 
-    let result_file_path = format!("{}/result.jsonl", config.result_dir);
+    let id = args.id.unwrap_or(config.default_dir.clone());
+
+    let result_file_path = format!("{}/{}.jsonl", config.result_dir, id);
     let best_file_path = format!("{}/best.jsonl", config.result_dir);
     let prev_best_file_path = format!("{}/prev_best.jsonl", config.result_dir);
     if !std::path::Path::new(&config.result_dir).exists() {

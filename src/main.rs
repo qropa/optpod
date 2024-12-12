@@ -1,6 +1,7 @@
 mod run;
 mod setbest;
 mod settings;
+mod show;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -22,8 +23,11 @@ fn exec_command(args: Cli) -> Result<()> {
         Command::Init => {
             settings::init()?;
         }
-        Command::Best => {
-            setbest::set_best()?;
+        Command::Best(args) => {
+            setbest::set_best(args)?;
+        }
+        Command::Show(args) => {
+            show::show(args)?;
         }
     }
 
@@ -43,5 +47,7 @@ enum Command {
     #[clap(name = "init")]
     Init,
     #[clap(name = "best")]
-    Best,
+    Best(setbest::SetBestArgs),
+    #[clap(name = "show")]
+    Show(show::ShowArgs),
 }
