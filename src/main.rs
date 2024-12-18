@@ -42,12 +42,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    #[clap(name = "run")]
+    #[clap(name = "run", alias = "r")]
     Run(run::RunArgs),
-    #[clap(name = "init")]
+    #[clap(name = "init", alias = "i")]
     Init,
-    #[clap(name = "best")]
+    #[clap(name = "best", alias = "b")]
     Best(setbest::SetBestArgs),
-    #[clap(name = "show")]
+    #[clap(name = "show", alias = "s")]
     Show(show::ShowArgs),
 }

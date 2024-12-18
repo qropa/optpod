@@ -16,12 +16,11 @@ pub fn init() -> Result<()> {
         }
     }
     let config = Config {
-        in_dir: "tools/in".to_string(),
-        result_dir: ".".to_string(),
-        tests_dir: "tests".to_string(),
-        default_dir: "default".to_string(),
-        standard_output_extension: "out".to_string(),
-        standard_error_extension: "err".to_string(),
+        input: "tools/in/{SEED04}.txt".to_string(),
+        result_dir: "optpod".to_string(),
+        default_id: "default".to_string(),
+        output: "{SEED04}.out".to_string(),
+        error: "{SEED04}.err".to_string(),
         cmd_tester: "./target/release/a".to_string(),
         extraction_regex: r"^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$"
             .to_string(),
@@ -47,12 +46,11 @@ pub fn read_settings() -> Result<Config> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub in_dir: String,
+    pub input: String,
     pub result_dir: String,
-    pub tests_dir: String,
-    pub default_dir: String,
-    pub standard_output_extension: String,
-    pub standard_error_extension: String,
+    pub default_id: String,
+    pub output: String,
+    pub error: String,
     pub cmd_tester: String,
     pub extraction_regex: String,
     pub scoring: String,

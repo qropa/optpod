@@ -1,9 +1,8 @@
-in_dir = "../../atcoder/ahc040/tools/in2"
+input = "../../atcoder/ahc040/tools/in2/{SEED04}.txt"
 result_dir = "optpod"
-tests_dir = "tests"
-default_dir = "default"
-standard_output_extension = "out"
-standard_error_extension = "err"
+default_id = "default"
+output = "tests2/{ID}/{SEED04}.out"
+error = "tests2/{ID}/{SEED04}.err"
 cmd_tester = "../../atcoder/ahc040/target/release/a"
 extraction_regex = '^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$'
 scoring = "max"

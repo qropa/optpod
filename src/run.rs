@@ -52,19 +52,26 @@ pub fn run(args: RunArgs) -> Result<(), anyhow::Error> {
     } else {
         num_cpus::get()
     };
-    if !std::path::Path::new(&config.tests_dir).exists() {
-        std::fs::create_dir(&config.tests_dir)?;
-    }
     if !std::path::Path::new(&config.result_dir).exists() {
         std::fs::create_dir(&config.result_dir)?;
     }
-    let id = args.id.unwrap_or(config.default_dir.clone());
+    let id = args.id.unwrap_or(config.default_id.clone());
     if &id == "best" || &id == "prev_best" {
         anyhow::bail!("Invalid id: {}. Must not be 'best' or 'prev_best'", id);
     }
-    let output_dir = format!("{}/{}", config.tests_dir, id);
-    if !std::path::Path::new(&output_dir).exists() {
-        std::fs::create_dir(&output_dir)?;
+    let sample_output_file_path = replace_placeholder2(&config.output, 0, &id);
+    let output_dir = std::path::Path::new(&sample_output_file_path)
+        .parent()
+        .unwrap();
+    if !output_dir.exists() {
+        std::fs::create_dir_all(output_dir)?;
+    }
+    let sample_error_file_path = replace_placeholder2(&config.error, 0, &id);
+    let error_dir = std::path::Path::new(&sample_error_file_path)
+        .parent()
+        .unwrap();
+    if !error_dir.exists() {
+        std::fs::create_dir_all(error_dir)?;
     }
 
     let res_file_path = format!("{}/{}.jsonl", config.result_dir, id);
@@ -177,7 +184,7 @@ fn single_exec(
     config: &Config,
     best_scores: &HashMap<usize, f64>,
 ) -> Result<ExecResult> {
-    let input_file_path = format!("{}/{:04}.txt", config.in_dir, seed);
+    let input_file_path = replace_placeholder(&config.input, seed);
     let input_file = std::fs::File::open(&input_file_path)?;
     let output = std::process::Command::new(&config.cmd_tester)
         .stdin(std::process::Stdio::from(input_file))
@@ -226,17 +233,24 @@ fn single_exec(
             }
         }
     }
-    let output_file_path = format!(
-        "{}/{}/{:>04}.{}",
-        config.tests_dir, id, seed, config.standard_output_extension
-    );
+    let output_file_path = replace_placeholder2(&config.output, seed, id);
+    eprintln!("output_file_path: {}", output_file_path);
     let mut output_file = std::fs::File::create(&output_file_path)?;
+    eprintln!("out file exists");
     output_file.write_all(&output.stdout)?;
-    let error_file_path = format!(
-        "{}/{}/{:>04}.{}",
-        config.tests_dir, id, seed, config.standard_error_extension
-    );
+    let error_file_path = replace_placeholder2(&config.error, seed, id);
     let mut error_file = std::fs::File::create(&error_file_path)?;
     error_file.write_all(&output.stderr)?;
     Ok(res)
+}
+
+fn replace_placeholder(s: &str, seed: usize) -> String {
+    s.replace("{SEED04}", &format!("{:04}", seed))
+        .replace("{SEED}", &format!("{}", seed))
+}
+
+fn replace_placeholder2(s: &str, seed: usize, id: &str) -> String {
+    s.replace("{SEED04}", &format!("{:04}", seed))
+        .replace("{SEED}", &format!("{}", seed))
+        .replace("{ID}", &format!("{}", id))
 }

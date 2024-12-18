@@ -7,7 +7,7 @@ use std::io::BufRead;
 pub fn show(args: ShowArgs) -> Result<()> {
     let config = settings::read_settings()?;
 
-    let id = args.id.unwrap_or(config.default_dir.clone());
+    let id = args.id.unwrap_or(config.default_id.clone());
 
     let result_file_path = format!("{}/{}.jsonl", config.result_dir, id);
     let result_file = std::fs::File::open(&result_file_path)?;
