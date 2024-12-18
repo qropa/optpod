@@ -19,8 +19,8 @@ pub fn init() -> Result<()> {
         input: "tools/in/{SEED04}.txt".to_string(),
         result_dir: "optpod".to_string(),
         default_id: "default".to_string(),
-        output: "{SEED04}.out".to_string(),
-        error: "{SEED04}.err".to_string(),
+        output: "tests/{ID}/{SEED04}.out".to_string(),
+        error: "tests/{ID}/{SEED04}.err".to_string(),
         cmd_tester: "./target/release/a".to_string(),
         extraction_regex: r"^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$"
             .to_string(),
