@@ -191,11 +191,14 @@ fn single_exec(
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!(
-            "Failed to execute seed:{}, Error:{:?}",
-            seed,
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let output_file_path = replace_placeholder2(&config.output, seed, id);
+        let mut output_file = std::fs::File::create(&output_file_path)?;
+        output_file.write_all(&output.stdout)?;
+        let error_file_path = replace_placeholder2(&config.error, seed, id);
+        let mut error_file = std::fs::File::create(&error_file_path)?;
+        error_file.write_all(&output.stderr)?;
+
+        anyhow::bail!("Failed to execute seed:{}", seed);
     }
     let mut res = ExecResult {
         seed,
