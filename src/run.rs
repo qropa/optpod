@@ -234,9 +234,7 @@ fn single_exec(
         }
     }
     let output_file_path = replace_placeholder2(&config.output, seed, id);
-    eprintln!("output_file_path: {}", output_file_path);
     let mut output_file = std::fs::File::create(&output_file_path)?;
-    eprintln!("out file exists");
     output_file.write_all(&output.stdout)?;
     let error_file_path = replace_placeholder2(&config.error, seed, id);
     let mut error_file = std::fs::File::create(&error_file_path)?;
