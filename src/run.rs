@@ -185,19 +185,31 @@ fn single_exec(
     best_scores: &HashMap<usize, f64>,
 ) -> Result<ExecResult> {
     let input_file_path = replace_placeholder(&config.input, seed);
-    let input_file = std::fs::File::open(&input_file_path)?;
-    let output = std::process::Command::new(&config.cmd_tester)
-        .stdin(std::process::Stdio::from(input_file))
+    let output_file_path = replace_placeholder2(&config.output, seed, id);
+    let error_file_path = replace_placeholder2(&config.error, seed, id);
+    let command_string = format!(
+        "{} < {} > {} 2> {}",
+        config.cmd_tester, input_file_path, output_file_path, error_file_path
+    );
+    let shell_command = if cfg!(target_os = "windows") {
+        "cmd"
+    } else {
+        "sh"
+    };
+    let cmmand_arg = if cfg!(target_os = "windows") {
+        "/C"
+    } else {
+        "-c"
+    };
+
+    let output = std::process::Command::new(shell_command)
+        .arg(cmmand_arg)
+        .arg(command_string)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .output()?;
 
     if !output.status.success() {
-        let output_file_path = replace_placeholder2(&config.output, seed, id);
-        let mut output_file = std::fs::File::create(&output_file_path)?;
-        output_file.write_all(&output.stdout)?;
-        let error_file_path = replace_placeholder2(&config.error, seed, id);
-        let mut error_file = std::fs::File::create(&error_file_path)?;
-        error_file.write_all(&output.stderr)?;
-
         anyhow::bail!("Failed to execute seed:{}", seed);
     }
     let mut res = ExecResult {
@@ -206,8 +218,12 @@ fn single_exec(
         relative: 0.0,
         data: vec![],
     };
-    for line in String::from_utf8_lossy(&output.stderr).lines() {
-        if let Some(caps) = regex::Regex::new(&config.extraction_regex)?.captures(line) {
+
+    let error_file = std::fs::File::open(&error_file_path)?;
+    let re = regex::Regex::new(&config.extraction_regex)?;
+
+    for line in std::io::BufReader::new(error_file).lines() {
+        if let Some(caps) = re.captures(line?.as_str()) {
             if &caps["VARIABLE"] == "score" {
                 res.score = caps["VALUE"].parse()?;
             } else {
@@ -236,12 +252,7 @@ fn single_exec(
             }
         }
     }
-    let output_file_path = replace_placeholder2(&config.output, seed, id);
-    let mut output_file = std::fs::File::create(&output_file_path)?;
-    output_file.write_all(&output.stdout)?;
-    let error_file_path = replace_placeholder2(&config.error, seed, id);
-    let mut error_file = std::fs::File::create(&error_file_path)?;
-    error_file.write_all(&output.stderr)?;
+
     Ok(res)
 }
 
