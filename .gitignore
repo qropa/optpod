@@ -1,5 +1,5 @@
 /target
 /tools
-/tests
+/tests/
 /optpod
-optpod_config.toml
+/optpod_config.toml

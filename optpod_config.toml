@@ -1,9 +1,0 @@
-input = "../../atcoder/ahc040/tools/in2/{SEED04}.txt"
-result_dir = "optpod"
-default_id = "default"
-output = "tests/{ID}/{SEED04}.out"
-error = "tests/{ID}/{SEED04}.err"
-cmd_tester = "../../atcoder/ahc040/target/release/a"
-extraction_regex = '^\s*\[DATA\]\s+(?P<VARIABLE>[a-zA-Z]\w*)\s*=\s*(?P<VALUE>\S+)\s*$'
-scoring = "max"
-threads_no = 0
