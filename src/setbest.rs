@@ -13,6 +13,7 @@ pub fn set_best(args: SetBestArgs) -> Result<()> {
     let config = settings::read_settings()?;
 
     let id = args.id.unwrap_or(config.default_id.clone());
+    let scoring = config.scoring.clone();
 
     let result_file_path = format!("{}/{}.jsonl", config.result_dir, id);
     let best_file_path = format!("{}/best.jsonl", config.result_dir);
@@ -31,7 +32,7 @@ pub fn set_best(args: SetBestArgs) -> Result<()> {
         .lines()
         .map(|line| serde_json::from_str::<run::ExecResult>(&line.unwrap()).unwrap())
         .collect::<Vec<_>>();
-    let best_file = std::fs::File::create(&best_file_path)?;
+    let best_file = std::fs::File::open(&best_file_path)?;
 
     // 空なら空のVecを作成
     let mut bests = if best_file.metadata()?.len() == 0 {
@@ -45,7 +46,9 @@ pub fn set_best(args: SetBestArgs) -> Result<()> {
 
     for result in results {
         if let Some(best) = bests.iter_mut().find(|best| best.seed == result.seed) {
-            if best.score < result.score {
+            if (scoring == "max" && best.score < result.score)
+                || (scoring == "min" && best.score > result.score)
+            {
                 *best = result;
             }
         } else {
